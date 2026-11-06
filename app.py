@@ -116,11 +116,11 @@ else:
         if is_done != task["done"]:
             st.session_state.tasks[idx]["done"] = is_done
             if is_done:
-                st.session_state.dialogue = "เก่งมาก! ทำสำเร็จไปอีกหนึ่งอย่างแล้วนะ 👍"
+                st.session_state.dialogue = "เก่งมาก! ทำสำเร็จไปอีกหนึ่งอย่างแล้วนะ ^_^"
                 st.session_state.current_img = "static/praise.png"
                 st.rerun()
             else:
-                st.session_state.dialogue = "อ้าว ยกเลิกเช็คซะงั้น สู้ๆ นะ!"
+                st.session_state.dialogue = "อ่าว ยกเลิกเช็คซะงั้น สู้ๆ นะ!"
                 st.session_state.current_img = "static/idle.png"
                 st.rerun()
 
