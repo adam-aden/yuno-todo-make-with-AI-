@@ -10,33 +10,32 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# โค้ด CSS จัดหน้าจอแบบ Visual Novel (ตัวละครเต็มจอ + กล่องข้อความซ้อนทับด้านล่าง)
+# ปรับ CSS ให้กล่องข้อความทับซ้อนอยู่ด้านล่างของตัวละคร และจัดหน้าจอให้พอดีมือถือ
 st.markdown("""
     <style>
     .stApp {
-        background-color: #0f0f14;
+        background-color: #0b0b10;
         color: #ffffff;
     }
-    /* ซ่อน Header และ Footer ของ Streamlit ให้กินพื้นที่เต็มจอ */
     header {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* จัดตำแหน่งตัวละครให้อยู่ตรงกลาง */
-    .vn-container {
+    /* กรอบ VN หลัก */
+    .vn-screen {
         position: relative;
         width: 100%;
+        max-width: 450px;
+        margin: 0 auto;
         text-align: center;
-        margin-top: 10px;
     }
     .vn-character {
-        max-height: 480px;
-        width: auto;
+        width: 100%;
+        max-height: 420px;
         object-fit: contain;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# กำหนดค่าเริ่มต้นใน Session State
 if 'tasks' not in st.session_state:
     st.session_state.tasks = []
 if 'dialogue' not in st.session_state:
@@ -48,7 +47,6 @@ if 'menu_mode' not in st.session_state:
 if 'box_opacity' not in st.session_state:
     st.session_state.box_opacity = 0.85
 
-# ฟังก์ชันดึงข้อมูลแผ่นดินไหว
 def fetch_earthquake_data():
     url = "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&limit=1"
     try:
@@ -66,21 +64,9 @@ def fetch_earthquake_data():
         return "เกิดข้อผิดพลาดในการเชื่อมต่อเครือข่าย"
 
 # -------------------------------------------------------------
-# 1. ส่วนแสดงภาพตัวละคร (ฉาก Visual Novel)
-# -------------------------------------------------------------
-st.markdown('<div class="vn-container">', unsafe_allow_html=True)
-if os.path.exists(st.session_state.current_img):
-    st.image(st.session_state.current_img, use_container_width=True)
-else:
-    st.warning("⚠️ ไม่พบไฟล์รูปภาพในโฟลเดอร์ static/")
-st.markdown('</div>', unsafe_allow_html=True)
-
-
-# -------------------------------------------------------------
-# 2. ปุ่มเลื่อนซ้าย-ขวาสำหรับเปลี่ยนโหมด (Menu Switcher)
+# เมนูเลือกโหมด (ไว้ด้านบนสุดเพื่อให้กดง่าย ไม่ต้องเลื่อนจอ)
 # -------------------------------------------------------------
 col_l, col_m, col_r = st.columns([1, 2, 1])
-
 modes = ["💬 พูดคุย", "📋 To-Do List", "🌐 แผ่นดินไหว"]
 current_idx = modes.index(st.session_state.menu_mode)
 
@@ -97,7 +83,7 @@ with col_l:
         st.rerun()
 
 with col_m:
-    st.markdown(f"<p style='text-align: center; margin: 5px; font-weight: bold; color: #a29bfe;'>โหมด: {st.session_state.menu_mode}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align: center; margin: 5px; font-weight: bold; color: #a29bfe; font-size: 14px;'>📌 {st.session_state.menu_mode}</p>", unsafe_allow_html=True)
 
 with col_r:
     if st.button("ถัดไป ▶️", use_container_width=True):
@@ -111,41 +97,49 @@ with col_r:
             st.session_state.dialogue = "เปลี่ยนโหมดแล้ว มีอะไรให้ช่วยไหม?"
         st.rerun()
 
+# -------------------------------------------------------------
+# ส่วนแสดงตัวละคร VN
+# -------------------------------------------------------------
+st.markdown('<div class="vn-screen">', unsafe_allow_html=True)
+if os.path.exists(st.session_state.current_img):
+    st.image(st.session_state.current_img, use_container_width=True)
+else:
+    st.warning("⚠️ ไม่พบไฟล์รูปภาพในโฟลเดอร์ static/")
+st.markdown('</div>', unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# 3. กล่องข้อความสไตล์ VN (ปรับความเข้มจางได้)
+# กล่องข้อความสไตล์ VN (ซ้อนทับบังขาเล็กน้อยตามแบบ VN) + ตัวปรับความเข้มจาง
 # -------------------------------------------------------------
-# แถบปรับความโปร่งแสงของกล่อง
-opacity_val = st.slider("🎚️ ปรับความเข้มจางกล่องข้อความ", 0.3, 1.0, st.session_state.box_opacity, 0.05)
+opacity_val = st.slider("🎚️ ปรับความเข้มจางกล่องข้อความ", 0.3, 1.0, st.session_state.box_opacity, 0.05, label_visibility="collapsed")
 st.session_state.box_opacity = opacity_val
-
-# แปลงค่า Opacity เป็นสีพื้นหลังแบบ Hex/RGBA
-bg_color = f"rgba(25, 25, 35, {opacity_val})"
+bg_color = f"rgba(20, 20, 30, {opacity_val})"
 
 st.markdown(f"""
     <div style="
         background-color: {bg_color};
         border: 2px solid #a29bfe;
         border-radius: 12px;
-        padding: 15px;
+        padding: 12px;
+        margin-top: -30px;
         margin-bottom: 10px;
-        box-shadow: 0px 4px 15px rgba(0,0,0,0.7);
-        min-height: 90px;
+        box-shadow: 0px -4px 15px rgba(0,0,0,0.8);
+        min-height: 80px;
+        position: relative;
+        z-index: 10;
     ">
-        <span style="font-size: 13px; color: #d6a2e8; font-weight: bold;">Yuno:</span>
-        <p style="font-size: 16px; margin-top: 5px; color: #ffffff;">{st.session_state.dialogue}</p>
+        <span style="font-size: 12px; color: #d6a2e8; font-weight: bold;">Yuno:</span>
+        <p style="font-size: 15px; margin-top: 3px; color: #ffffff; margin-bottom: 0px;">{st.session_state.dialogue}</p>
     </div>
 """, unsafe_allow_html=True)
 
-
 # -------------------------------------------------------------
-# 4. เนื้อหาภายในโหมดต่างๆ
+# เนื้อหาภายในโหมดต่างๆ (To-Do List / แผ่นดินไหว)
 # -------------------------------------------------------------
 if st.session_state.menu_mode == "💬 พูดคุย":
-    st.caption("💡 ทริป: กดปุ่มซ้าย-ขวาเพื่อสลับไปหน้า To-Do List หรือเช็คแผ่นดินไหวได้เลย")
+    st.caption("💡 ทริป: ใช้ปุ่มซ้าย-ขวาด้านบน เพื่อเปิด To-Do List หรือเช็คแผ่นดินไหว")
 
 elif st.session_state.menu_mode == "📋 To-Do List":
-    # ช่องพิมพ์พร้อมสัญลักษณ์ ^ ตามที่ขอ
+    # ฟอร์มเพิ่ม To-Do พร้อมปุ่ม ^
     with st.form(key="vn_todo_form", clear_on_submit=True):
         col_input, col_btn = st.columns([4, 1])
         with col_input:
@@ -159,7 +153,7 @@ elif st.session_state.menu_mode == "📋 To-Do List":
             st.session_state.current_img = "static/idle.png"
             st.rerun()
 
-    # แสดงรายการ To-Do
+    # รายการ To-Do (กดเช็คแล้วเปลี่ยนเป็นภาพชูนิ้วยิ้ม 3 วินาที)
     if st.session_state.tasks:
         st.markdown("---")
         for idx, task in enumerate(st.session_state.tasks):
@@ -182,7 +176,7 @@ elif st.session_state.menu_mode == "📋 To-Do List":
                 st.session_state.dialogue = "ลบรายการออกให้เรียบร้อยแล้วค่ะ"
                 st.rerun()
     else:
-        st.info("📌 ยังไม่มีรายการ To-Do List พิมพ์เพิ่มด้านบนแล้วกดปุ่ม ^ ได้เลยค่ะ")
+        st.caption("📌 ยังไม่มีรายการ To-Do List พิมพ์เพิ่มด้านบนแล้วกดปุ่ม ^ ได้เลยค่ะ")
 
 elif st.session_state.menu_mode == "🌐 แผ่นดินไหว":
     if st.button("🔄 อัปเดตข้อมูลแผ่นดินไหวล่าสุด", use_container_width=True):
@@ -190,9 +184,8 @@ elif st.session_state.menu_mode == "🌐 แผ่นดินไหว":
         st.session_state.current_img = "static/alert.png"
         st.rerun()
 
-
 # -------------------------------------------------------------
-# 5. ระบบหน่วงเวลา 3 วินาที เมื่อกดทำ To-Do สำเร็จ
+# ระบบหน่วงเวลา 3 วินาที เมื่อกดติ๊กถูก To-Do สำเร็จ
 # -------------------------------------------------------------
 if st.session_state.current_img == "static/praise.png":
     time.sleep(3)
