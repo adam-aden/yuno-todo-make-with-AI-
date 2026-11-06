@@ -3,52 +3,52 @@ import requests
 import time
 import os
 
-# ตั้งค่าหน้าเว็บ (Mobile-Friendly)
 st.set_page_config(
-    page_title="Yuno To-Do Companion",
-    page_icon="📝",
+    page_title="Yuno VN Companion",
+    page_icon="💜",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS จัดแต่งหน้าจอให้เหมือนแอปมือถือ
+# โค้ด CSS จัดหน้าจอแบบ Visual Novel (ตัวละครเต็มจอ + กล่องข้อความซ้อนทับด้านล่าง)
 st.markdown("""
     <style>
     .stApp {
-        background-color: #1a1a24;
+        background-color: #0f0f14;
         color: #ffffff;
     }
-    .chat-bubble {
-        background-color: #2b2b36;
-        border-radius: 15px;
-        padding: 12px;
-        margin-left: 5px;
-        border: 2px solid #6c5ce7;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
-        font-size: 14px;
-        min-height: 70px;
-        display: flex;
-        align-items: center;
+    /* ซ่อน Header และ Footer ของ Streamlit ให้กินพื้นที่เต็มจอ */
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* จัดตำแหน่งตัวละครให้อยู่ตรงกลาง */
+    .vn-container {
+        position: relative;
+        width: 100%;
+        text-align: center;
+        margin-top: 10px;
     }
-    .character-img img {
-        max-width: 100% !important;
-        height: auto;
-        border-radius: 10px;
+    .vn-character {
+        max-height: 480px;
+        width: auto;
+        object-fit: contain;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# จัดการ State (ความจำของแอปชั่วคราว)
+# กำหนดค่าเริ่มต้นใน Session State
 if 'tasks' not in st.session_state:
     st.session_state.tasks = []
-
 if 'dialogue' not in st.session_state:
-    st.session_state.dialogue = "สวัสดี! วันนี้มีอะไรให้ฉันช่วยจดบ้างล่ะ?"
-
+    st.session_state.dialogue = "ยินดีต้อนรับค่ะ วันนี้มีอะไรให้ฉันช่วยดูแลหรือเปล่า?"
 if 'current_img' not in st.session_state:
     st.session_state.current_img = "static/idle.png"
+if 'menu_mode' not in st.session_state:
+    st.session_state.menu_mode = "💬 พูดคุย"
+if 'box_opacity' not in st.session_state:
+    st.session_state.box_opacity = 0.85
 
-# ฟังก์ชันดึงข้อมูลแผ่นดินไหว / ภัยธรรมชาติจาก USGS API
+# ฟังก์ชันดึงข้อมูลแผ่นดินไหว
 def fetch_earthquake_data():
     url = "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&limit=1"
     try:
@@ -61,78 +61,141 @@ def fetch_earthquake_data():
                 mag = features[0]['properties']['mag']
                 return f"⚠️ รายงานแผ่นดินไหวล่าสุด: ขนาด {mag} Mv ที่ {place}"
             return "ไม่พบรายงานแผ่นดินไหวล่าสุดในตอนนี้ค่ะ"
-        return "เชื่อมต่อระบบรายงานภัยธรรมชาติไม่ได้"
-    except Exception as e:
-        return f"เกิดข้อผิดพลาด: ระบบเน็ตอาจมีปัญหา"
+        return "ไม่สามารถเชื่อมต่อระบบรายงานภัยธรรมชาติได้"
+    except:
+        return "เกิดข้อผิดพลาดในการเชื่อมต่อเครือข่าย"
 
-# ----------------
-# ส่วนบน: ตัวละคร (ซ้าย) + กล่องคำพูด (ขวา)
-# ----------------
-col_img, col_text = st.columns([1, 2], vertical_alignment="center")
+# -------------------------------------------------------------
+# 1. ส่วนแสดงภาพตัวละคร (ฉาก Visual Novel)
+# -------------------------------------------------------------
+st.markdown('<div class="vn-container">', unsafe_allow_html=True)
+if os.path.exists(st.session_state.current_img):
+    st.image(st.session_state.current_img, use_container_width=True)
+else:
+    st.warning("⚠️ ไม่พบไฟล์รูปภาพในโฟลเดอร์ static/")
+st.markdown('</div>', unsafe_allow_html=True)
 
-with col_img:
-    st.markdown('<div class="character-img">', unsafe_allow_html=True)
-    if os.path.exists(st.session_state.current_img):
-        st.image(st.session_state.current_img, use_container_width=True)
-    else:
-        # กรณีหาไฟล์รูปไม่เจอ ให้แสดงข้อความสำรอง
-        st.info("📷 รอโหลดรูปตัวละคร")
-    st.markdown('</div>', unsafe_allow_html=True)
 
-with col_text:
-    st.markdown(f'<div class="chat-bubble">{st.session_state.dialogue}</div>', unsafe_allow_html=True)
+# -------------------------------------------------------------
+# 2. ปุ่มเลื่อนซ้าย-ขวาสำหรับเปลี่ยนโหมด (Menu Switcher)
+# -------------------------------------------------------------
+col_l, col_m, col_r = st.columns([1, 2, 1])
 
-st.divider()
+modes = ["💬 พูดคุย", "📋 To-Do List", "🌐 แผ่นดินไหว"]
+current_idx = modes.index(st.session_state.menu_mode)
 
-# ปุ่มเช็คแผ่นดินไหว
-if st.button("🌐 เช็ครายงานแผ่นดินไหว / ภัยพิบัติ", use_container_width=True):
-    earthquake_msg = fetch_earthquake_data()
-    st.session_state.dialogue = earthquake_msg
-    st.session_state.current_img = "static/alert.png"
-    st.rerun()
-
-st.subheader("📋 To-Do List ของคุณ")
-
-# ฟอร์มเพิ่มรายการ
-with st.form(key="add_task_form", clear_on_submit=True):
-    new_task = st.text_input("พิมพ์หัวข้อสิ่งที่ต้องทำ:", placeholder="เช่น ทำการบ้านวิชา...")
-    submit_button = st.form_submit_button(label="➕ เพิ่มรายการ", use_container_width=True)
-    
-    if submit_button and new_task.strip():
-        st.session_state.tasks.append({"title": new_task.strip(), "done": False})
-        st.session_state.dialogue = f"บันทึก '{new_task.strip()}' เรียบร้อย! ลุยกันเลย"
-        st.session_state.current_img = "static/idle.png"
+with col_l:
+    if st.button("◀️ ก่อนหน้า", use_container_width=True):
+        new_idx = (current_idx - 1) % len(modes)
+        st.session_state.menu_mode = modes[new_idx]
+        if st.session_state.menu_mode == "🌐 แผ่นดินไหว":
+            st.session_state.dialogue = fetch_earthquake_data()
+            st.session_state.current_img = "static/alert.png"
+        else:
+            st.session_state.current_img = "static/idle.png"
+            st.session_state.dialogue = "เปลี่ยนโหมดแล้ว มีอะไรให้ช่วยไหม?"
         st.rerun()
 
-# แสดงรายการ To-Do
-if not st.session_state.tasks:
-    st.caption("ยังไม่มีรายการในตอนนี้ พิมพ์เพิ่มด้านบนได้เลย!")
-else:
-    for idx, task in enumerate(st.session_state.tasks):
-        c1, c2 = st.columns([4, 1])
-        
-        is_done = c1.checkbox(task["title"], value=task["done"], key=f"check_{idx}")
-        
-        if is_done != task["done"]:
-            st.session_state.tasks[idx]["done"] = is_done
-            if is_done:
-                st.session_state.dialogue = "เก่งมาก! ทำสำเร็จไปอีกหนึ่งอย่างแล้วนะ ^_^"
-                st.session_state.current_img = "static/praise.png"
-                st.rerun()
-            else:
-                st.session_state.dialogue = "อ่าว ยกเลิกเช็คซะงั้น สู้ๆ นะ!"
-                st.session_state.current_img = "static/idle.png"
-                st.rerun()
+with col_m:
+    st.markdown(f"<p style='text-align: center; margin: 5px; font-weight: bold; color: #a29bfe;'>โหมด: {st.session_state.menu_mode}</p>", unsafe_allow_html=True)
 
-        if c2.button("🗑️", key=f"del_{idx}"):
-            removed_item = st.session_state.tasks.pop(idx)
-            st.session_state.dialogue = f"ลบ '{removed_item['title']}' ออกจากลิสต์แล้ว"
+with col_r:
+    if st.button("ถัดไป ▶️", use_container_width=True):
+        new_idx = (current_idx + 1) % len(modes)
+        st.session_state.menu_mode = modes[new_idx]
+        if st.session_state.menu_mode == "🌐 แผ่นดินไหว":
+            st.session_state.dialogue = fetch_earthquake_data()
+            st.session_state.current_img = "static/alert.png"
+        else:
+            st.session_state.current_img = "static/idle.png"
+            st.session_state.dialogue = "เปลี่ยนโหมดแล้ว มีอะไรให้ช่วยไหม?"
+        st.rerun()
+
+
+# -------------------------------------------------------------
+# 3. กล่องข้อความสไตล์ VN (ปรับความเข้มจางได้)
+# -------------------------------------------------------------
+# แถบปรับความโปร่งแสงของกล่อง
+opacity_val = st.slider("🎚️ ปรับความเข้มจางกล่องข้อความ", 0.3, 1.0, st.session_state.box_opacity, 0.05)
+st.session_state.box_opacity = opacity_val
+
+# แปลงค่า Opacity เป็นสีพื้นหลังแบบ Hex/RGBA
+bg_color = f"rgba(25, 25, 35, {opacity_val})"
+
+st.markdown(f"""
+    <div style="
+        background-color: {bg_color};
+        border: 2px solid #a29bfe;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 10px;
+        box-shadow: 0px 4px 15px rgba(0,0,0,0.7);
+        min-height: 90px;
+    ">
+        <span style="font-size: 13px; color: #d6a2e8; font-weight: bold;">Yuno:</span>
+        <p style="font-size: 16px; margin-top: 5px; color: #ffffff;">{st.session_state.dialogue}</p>
+    </div>
+""", unsafe_allow_html=True)
+
+
+# -------------------------------------------------------------
+# 4. เนื้อหาภายในโหมดต่างๆ
+# -------------------------------------------------------------
+if st.session_state.menu_mode == "💬 พูดคุย":
+    st.caption("💡 ทริป: กดปุ่มซ้าย-ขวาเพื่อสลับไปหน้า To-Do List หรือเช็คแผ่นดินไหวได้เลย")
+
+elif st.session_state.menu_mode == "📋 To-Do List":
+    # ช่องพิมพ์พร้อมสัญลักษณ์ ^ ตามที่ขอ
+    with st.form(key="vn_todo_form", clear_on_submit=True):
+        col_input, col_btn = st.columns([4, 1])
+        with col_input:
+            new_task = st.text_input("เพิ่มสิ่งที่ต้องทำ:", placeholder="พิมพ์งานที่นี่...", label_visibility="collapsed")
+        with col_btn:
+            submit_t = st.form_submit_button(" ^ ", use_container_width=True)
+            
+        if submit_t and new_task.strip():
+            st.session_state.tasks.append({"title": new_task.strip(), "done": False})
+            st.session_state.dialogue = f"จดรายการ '{new_task.strip()}' ให้เรียบร้อยแล้วค่ะ!"
             st.session_state.current_img = "static/idle.png"
             st.rerun()
 
-# ระบบหน่วงเวลา 2 วินาที เมื่อกดเช็คสำเร็จ (เปลี่ยนภาพกลับเป็นปกติ)
+    # แสดงรายการ To-Do
+    if st.session_state.tasks:
+        st.markdown("---")
+        for idx, task in enumerate(st.session_state.tasks):
+            c_chk, c_del = st.columns([5, 1])
+            is_done = c_chk.checkbox(task["title"], value=task["done"], key=f"vn_chk_{idx}")
+            
+            if is_done != task["done"]:
+                st.session_state.tasks[idx]["done"] = is_done
+                if is_done:
+                    st.session_state.dialogue = "เก่งมากเลยค่ะ! ทำสำเร็จไปอีกหนึ่งอย่างแล้วนะ 👍✨"
+                    st.session_state.current_img = "static/praise.png"
+                    st.rerun()
+                else:
+                    st.session_state.dialogue = "อ้าว ยกเลิกสถานะทำเสร็จซะแล้ว สู้ๆ นะคะ!"
+                    st.session_state.current_img = "static/idle.png"
+                    st.rerun()
+                    
+            if c_del.button("🗑️", key=f"vn_del_{idx}"):
+                st.session_state.tasks.pop(idx)
+                st.session_state.dialogue = "ลบรายการออกให้เรียบร้อยแล้วค่ะ"
+                st.rerun()
+    else:
+        st.info("📌 ยังไม่มีรายการ To-Do List พิมพ์เพิ่มด้านบนแล้วกดปุ่ม ^ ได้เลยค่ะ")
+
+elif st.session_state.menu_mode == "🌐 แผ่นดินไหว":
+    if st.button("🔄 อัปเดตข้อมูลแผ่นดินไหวล่าสุด", use_container_width=True):
+        st.session_state.dialogue = fetch_earthquake_data()
+        st.session_state.current_img = "static/alert.png"
+        st.rerun()
+
+
+# -------------------------------------------------------------
+# 5. ระบบหน่วงเวลา 3 วินาที เมื่อกดทำ To-Do สำเร็จ
+# -------------------------------------------------------------
 if st.session_state.current_img == "static/praise.png":
-    time.sleep(2)
+    time.sleep(3)
     st.session_state.current_img = "static/idle.png"
-    st.session_state.dialogue = "สู้ๆ กับงานที่เหลือต่อนะ!"
+    st.session_state.dialogue = "สู้ๆ กับงานที่เหลือต่อนะ ฉันคอยเอาใจช่วยอยู่!"
     st.rerun()
